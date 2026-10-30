@@ -24,10 +24,10 @@ export interface CallbackClaims {
  *
  *   reply  The runner's token: the answer, the progress reports and the transcript backup. It is
  *          kept out of Claude's env (box/run-turn.mjs strips it), so Claude does not stumble on it.
- *          That is a guard against accidents, not a wall: Claude runs as the runner's user with
- *          sudo (template/Dockerfile), so a determined prompt injection can read it from the
- *          runner's process. What holds anyway: it opens only this one thread's doors, until it
- *          expires, and a stored transcript is never replaced.
+ *          That is a guard against accidents, not a wall: Claude runs as the same user as the
+ *          runner, so a determined prompt injection can read it from the runner's process. What
+ *          holds anyway: it opens only this one thread's doors, until it expires, and a stored
+ *          transcript is never replaced.
  *   tools  Claude's token, for the doors it calls itself (box/tools.mjs): post a file or a canvas
  *          into this thread. Same claims, same expiry, and only ever this one thread.
  *   file   A grant to download ONE Slack file this thread was sent (src/files.ts).

@@ -276,14 +276,13 @@ token for the memory repo; see [Memory](#memory).
 | `ui/` | The web UI: one HTML shell, one script, one stylesheet, and `transcript.js` (reads a backup) |
 | `src/db.ts` | The D1 database helpers |
 | `migrations/` | The D1 tables. `npm run setup` applies them |
-| `box/run-turn.mjs` | Runs inside the sandbox: runs Claude, reports progress, posts the answer back |
-| `box/progress.mjs` | Runs inside the sandbox: turns Claude's stream events into the status line and the live transcript |
-| `box/memory.mjs` | Runs inside the sandbox: pulls the channel's notes before Claude starts and pushes what changed |
-| `box/files.mjs` | Runs inside the sandbox: downloads the turn's files before Claude starts |
-| `box/tools.mjs` | Runs inside the sandbox: Claude's commands to post a file or a canvas into its thread, to search public channels, to make and change routines, to follow a PR, and to drive a code channel |
-| `box/inbox.mjs`, `box/inbox-hook.mjs` | Runs inside the sandbox: follow-ups sent mid-turn, and the hook that hands them to Claude |
-| `box/CLAUDE.md` | The instructions Claude reads in the sandbox. Edit this to change the bot's behavior. |
-| `template/Dockerfile` | The sandbox image. Run `npm run template:build` after you change it. |
+| `box/run-turn.mjs` | Runs on the runner: runs Claude, reports progress, posts the answer back |
+| `box/progress.mjs` | Runs on the runner: turns Claude's stream events into the status line and the live transcript |
+| `box/memory.mjs` | Runs on the runner: pulls the channel's notes before Claude starts and pushes what changed |
+| `box/files.mjs` | Runs on the runner: downloads the turn's files before Claude starts |
+| `box/tools.mjs` | Runs on the runner: Claude's commands to post a file or a canvas into its thread, to search public channels, to make and change routines, to follow a PR, and to drive a code channel |
+| `box/inbox.mjs`, `box/inbox-hook.mjs` | Runs on the runner: follow-ups sent mid-turn, and the hook that hands them to Claude |
+| `box/CLAUDE.md` | The instructions Claude reads in its workspace. Edit this to change the bot's behavior. |
 
 ## Pick the model
 

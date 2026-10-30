@@ -35,9 +35,10 @@ paste a secret into the chat; secrets go in `.env.setup`.
   bucket, the D1 database and applies `migrations/`, and every step must stay safe to re-run. A new
   Cloudflare resource goes in `wrangler.jsonc` AND in setup; a new secret or var goes in setup,
   `.env.setup.example`, SETUP.md and the README together.
-- `box/` files are written into every sandbox on every turn (`run-turn.mjs` imports `progress.mjs`,
-  `inbox.mjs` and `files.mjs` from beside it, and `inbox-hook.mjs` imports `inbox.mjs`; a new box file must be added to the write list in `src/sandbox.ts`). A change there reaches running threads
-  on the next deploy; a change to `template/Dockerfile` needs `npm run template:build`.
+- `box/` files are shipped to the machine on every turn (`run-turn.mjs` imports `progress.mjs`,
+  `inbox.mjs` and `files.mjs` from beside it, and `inbox-hook.mjs` imports `inbox.mjs`; a new box file
+  must be added to `BOX_FILES` in `src/box-src.ts`). A change there reaches the next turn: the daemon
+  caches the bundle by its hash, so nothing is reinstalled by hand.
 - Workspace search (`/sandbox/search`, `src/search.ts`) answers from PUBLIC channels only: the bot
   token, `channel_types: public_channel`, and a `conversations.info` check on every result, which
   drops anything Slack does not call a public channel. Slack lets a bot token search only with the
