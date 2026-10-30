@@ -1,0 +1,72 @@
+{
+  "display_information": {
+    "name": "Percy Jr",
+    "description": "Runs Claude Code in a cloud sandbox, one per Slack thread.",
+    "background_color": "#1d1c1d"
+  },
+  "features": {
+    "app_home": { "home_tab_enabled": true, "messages_tab_enabled": true, "messages_tab_read_only_enabled": false },
+    "bot_user": { "display_name": "percy-jr", "always_online": true },
+    "code_channels": { "enabled": true },
+    "agent_view": {
+      "agent_description": "Percy Jr runs Claude Code in its own cloud sandbox, works on your GitHub repositories, and opens pull requests.",
+      "suggested_prompts": [
+        { "title": "Fix an issue", "message": "Find an issue in one of my repositories, fix it, test it, and open a PR." },
+        { "title": "Investigate this", "message": "Investigate what I am currently viewing in Slack." },
+        { "title": "Make a routine", "message": "Every weekday at 9am, summarise yesterday's open PRs in this channel." }
+      ]
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "assistant:write",
+        "canvases:write",
+        "channels:history",
+        "channels:join",
+        "channels:manage",
+        "channels:read",
+        "chat:write",
+        "code_channels:manage",
+        "files:read",
+        "files:write",
+        "groups:history",
+        "groups:read",
+        "im:history",
+        "im:write",
+        "mpim:history",
+        "reactions:read",
+        "reactions:write",
+        "search:read.files",
+        "search:read.public",
+        "users:read"
+      ]
+    },
+    "pkce_enabled": false
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://YOUR-WORKER.workers.dev/slack/events",
+      "bot_events": [
+        "app_mention",
+        "message.channels",
+        "message.groups",
+        "message.im",
+        "message.mpim",
+        "reaction_added",
+        "app_home_opened",
+        "app_context_changed",
+        "agent_session_stopped"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://YOUR-WORKER.workers.dev/slack/interactive"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false,
+    "is_mcp_enabled": false
+  }
+}

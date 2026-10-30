@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Slack agent</title>
+  <link rel="stylesheet" href="/ui/style.css">
+  <script type="module" src="/ui/app.js"></script>
+</head>
+<body data-page="{{PAGE}}">
+  <header>
+    <strong>Slack agent</strong>
+    <nav>
+      <a href="/ui/" data-nav="threads">Threads</a>
+      <a href="/ui/routines" data-nav="routines">Routines</a>
+      <a href="/ui/channels" data-nav="channels">Channels</a>
+    </nav>
+    <span id="me"></span>
+  </header>
+  <main id="main"><p class="muted">Loading…</p></main>
+</body>
+</html>

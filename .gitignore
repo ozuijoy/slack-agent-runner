@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+dist/
+.DS_Store
+slack-manifest.local.json
+.env.setup

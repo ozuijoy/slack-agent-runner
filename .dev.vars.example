@@ -1,0 +1,9 @@
+# Copy to .dev.vars for `npm run dev`. Never commit .dev.vars.
+SLACK_SIGNING_SECRET=
+SLACK_BOT_TOKEN=
+SANDBOX_API_KEY=
+CALLBACK_SECRET=
+# 64 hex characters, e.g. `openssl rand -hex 32`. Encrypts per-channel secrets.
+CHANNEL_SECRETS_KEY=
+CLAUDE_CODE_OAUTH_TOKEN=
+# or ANTHROPIC_API_KEY=

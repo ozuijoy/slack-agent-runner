@@ -1,0 +1,72 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "slack-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Slack and GitHub reach the Worker on its workers.dev address.
+  "workers_dev": true,
+  // The web UI's own host, a custom domain on a zone in your Cloudflare account (README, "Web UI").
+  // Cloudflare Access cannot cover only /ui on workers.dev, so the UI lives here instead. `npm run
+  // setup` writes it from UI_HOST, for example [{ "pattern": "agent.example.com", "custom_domain": true }].
+  "routes": [],
+  "observability": { "enabled": true },
+
+  // Workers Paid. A turn launch talks to the sandbox provider several times and the
+  // pause call can take over a minute, which the free plan's 10 ms of CPU cannot fit.
+  "limits": { "cpu_ms": 300000 },
+
+  // One object per Slack thread. It is the lock that keeps one Claude turn running
+  // per thread, and its alarm pauses the thread's sandbox once the thread goes quiet.
+  "durable_objects": { "bindings": [{ "name": "THREADS", "class_name": "ThreadState" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ThreadState"] }],
+
+  // Slack wants an answer in 3 seconds; starting a sandbox takes longer. The events
+  // route answers at once and this queue does the launch, with retries.
+  "queues": {
+    "producers": [{ "binding": "TURNS", "queue": "slack-agent-turns" }],
+    "consumers": [{ "queue": "slack-agent-turns", "max_batch_size": 1, "max_retries": 3 }]
+  },
+
+  // Routines, channel settings and the transcript index. `npm run setup` creates the database,
+  // writes its id here, and applies the SQL files in migrations/.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "slack-agent", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
+
+  // Every turn's Claude transcript, copied out of the sandbox after the turn. Kept forever: the
+  // bucket has no lifecycle rule. `npm run setup` creates it.
+  "r2_buckets": [{ "binding": "TRANSCRIPTS", "bucket_name": "slack-agent-transcripts" }],
+
+  // Routines (src/routines.ts): every minute the Worker fires the routines that are due. Created by
+  // the deploy, which `npm run setup` runs. Minute precision is what lets a routine run that often.
+  "triggers": { "crons": ["* * * * *"] },
+
+  // The script the sandbox runs for each turn, and the instructions Claude reads there. And the web
+  // UI's page, script and styles (ui/), served by the Worker behind Cloudflare Access.
+  "rules": [{ "type": "Text", "globs": ["**/box/*.md", "**/box/*.mjs", "**/ui/*.html", "**/ui/*.js", "**/ui/*.css"], "fallthrough": true }],
+
+  "vars": {
+    // "e2b" or "impello". `npm run setup` sets this for you.
+    "SANDBOX_PROVIDER": "e2b",
+    "SANDBOX_TEMPLATE": "slack-agent",
+    // How long one Claude turn may run. Keep it under 50 minutes on E2B Hobby,
+    // which stops a sandbox after 1 hour of continuous running.
+    "MAX_TURN_MINUTES": "45",
+    // How long a thread may sit quiet before its sandbox is paused.
+    "IDLE_PAUSE_MINUTES": "5",
+    // The bot's memory: a private GitHub repo, owner/name, with the GitHub App installed on it.
+    // One folder per Slack channel (src/memory.ts). `npm run setup` sets this for you.
+    "MEMORY_REPO": "",
+    // The web UI (/ui) sits on its own host behind Cloudflare Access, and the Worker checks Access's
+    // JWT too. UI_HOST is that host (the custom domain in "routes"); then your Zero Trust team domain
+    // (for example myteam.cloudflareaccess.com) and the Access application's AUD tag. Any of them
+    // empty means the UI refuses everyone. `npm run setup` sets them (README, "Web UI").
+    "UI_HOST": "",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    // The Worker's workers.dev address. A routine made on the web UI reports back here, never to
+    // UI_HOST (rule 6 in src/ui.ts). `npm run setup` writes it from the deploy output.
+    "WORKER_URL": ""
+  }
+}
