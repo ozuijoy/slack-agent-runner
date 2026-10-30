@@ -1,7 +1,7 @@
-# Slack Agent Starter
+# Slack Agent Runner
 
-A Cloudflare Worker that runs Claude Code in a per-thread cloud sandbox (E2B or Impello) and
-replies in Slack. The README explains the design; read it first.
+A Cloudflare Worker that hands Claude Code turns to a machine you run, one workspace per Slack
+thread, and replies in Slack. The README explains the design; read it first.
 
 **If you were asked to set this repo up, follow SETUP.md step by step.** Never ask the human to
 paste a secret into the chat; secrets go in `.env.setup`.

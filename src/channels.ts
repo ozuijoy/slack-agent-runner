@@ -75,7 +75,7 @@ export const MAX_SECRET_BYTES = 8_000
 /**
  * Names the sandbox already uses, or that change how a program runs. A channel secret with one of
  * these names could take over the runner's own doors or Claude's sign-in, or load code into every
- * process. The runner also sets its own envs AFTER the channel's (src/sandbox.ts), so this list is
+ * process. The runner also sets its own envs AFTER the channel's (src/runner-jobs.ts), so this list is
  * the second guard, not the only one.
  */
 const RESERVED_NAMES = new Set([

@@ -1,16 +1,17 @@
-# Slack Agent Starter
+# Slack Agent Runner
 
 Your own coding agent in Slack. @mention it in a thread, and it runs **Claude Code** in its own
-cloud sandbox and replies in the thread. Follow-ups in the thread continue the same conversation.
+workspace on your own machine and replies in the thread. Follow-ups in the thread continue the same conversation.
 It remembers what it learns in each channel, in a private GitHub repo you own, and through the
 same GitHub App it can clone your repos, open pull requests, and come back to them when CI fails or
 someone reviews.
 
-It runs on **Cloudflare Workers**, and the sandbox runs on **E2B** or **Impello** (you pick).
+It runs on **Cloudflare Workers**, and the turns run on a machine you control: a laptop, a mini PC,
+a small VPS. Nothing is rented per turn.
 
 What it does:
 
-- **Threads are conversations.** Each Slack thread gets its own sandbox and Claude session. A
+- **Threads are conversations.** Each Slack thread gets its own workspace and Claude session. A
   follow-up sent while it works reaches Claude at its next step (📨), and the one reply covers both.
 - **You see it work.** A status message says what Claude is doing, with a **Stop** button and a
   **Follow along** link to the live transcript.
@@ -26,17 +27,17 @@ What it does:
 - **Every transcript backed up** to R2, kept forever.
 
 ```
- Slack ──@mention──▶ Worker ──queue──▶ sandbox (one per thread)
-   ▲                  │                    │  claude -p --resume <thread session>
-   └──── reply ◀──────┴──◀── callback ─────┘  (posts its own answer back)
+ Slack ──@mention──▶ Worker ──job──▶ your machine (one workspace per thread)
+   ▲                  │  queue in D1     │  claude -p --resume <thread session>
+   └──── reply ◀──────┴──◀── callback ───┘  (posts its own answer back)
 ```
 
 ## What you need
 
 | Thing | Cost | Notes |
 |---|---|---|
-| Cloudflare account on **Workers Paid** | $5/month | The free plan's CPU limit is too small for the sandbox calls. Setup also makes a D1 database and an R2 bucket (both have a free allowance). |
-| A sandbox provider: **E2B** or **Impello** | E2B: $100 free credit. Impello: 7-day free trial. | Setup asks which one. |
+| A Cloudflare account, free plan | Free | A turn is one database insert: the Worker dispatches, your machine works. Setup makes a D1 database, an R2 bucket and a queue, all inside the free allowance. |
+| A machine that stays on: laptop, mini PC, VPS | Yours | Node 22 and the `claude` CLI. One turn at a time, ~1 GB of RAM each. |
 | Claude: a **Pro/Max plan** or an **Anthropic API key** | Your plan, or pay per use | Read [Which Claude sign-in?](#which-claude-sign-in) first. |
 | A Slack workspace where you can install apps | Free | |
 | Node.js 22.6 or newer | Free | `node --version` |
@@ -51,7 +52,7 @@ What it does:
 
    > Set up this repo by following SETUP.md.
 
-The agent asks you two questions (E2B or Impello? Claude plan or API key?), runs every command, and
+The agent asks you one question (Claude plan or API key?), runs every command, and
 tells you when you need to do something by hand: log in to Cloudflare, make the keys, and create the
 Slack app. **You put the keys in a file, `.env.setup`, never in the chat.** The file is git-ignored.
 
@@ -67,26 +68,26 @@ deploys the Worker and tells you how to make the app; then you run `npm run setu
 Slack secrets. Every step is safe to repeat.
 
 Every secret is stored with `wrangler secret put`. None of them go in a file in this repo. Setup
-makes three random ones once and keeps them: `CALLBACK_SECRET` (signs the sandbox's tokens),
+makes four random ones once and keeps them: `CALLBACK_SECRET` (signs a turn's tokens),
 `CHANNEL_SECRETS_KEY` (encrypts channel secrets; replacing it makes every stored channel secret
-unreadable) and `GITHUB_WEBHOOK_SECRET` (checks GitHub's webhook; setup also writes it into the
-git-ignored `.env.setup` so you can copy it into the GitHub App). If setup cannot read the Worker's
+unreadable), `RUNNER_SECRET` (how your machine reaches the Worker) and `GITHUB_WEBHOOK_SECRET`
+(checks GitHub's webhook). The last two are also written into the git-ignored `.env.setup`, because
+you need to copy them: one into the machine, one into the GitHub App. If setup cannot read the Worker's
 secret list, it stops rather than make a new one over a working one.
 
-When it is done, invite the bot to a channel (`/invite @percy-jr`) and @mention it.
+When it is done, invite the bot to a channel (`/invite @slack-agent-runner`) and @mention it.
 
-### Which sandbox provider?
+### Where the turns run
 
-Both work the same way. Pick one, and setup handles the rest.
+On a machine you own, through `runner/runner-daemon.mjs`. It asks the Worker for work, runs
+`box/run-turn.mjs` with the `claude` CLI, and puts the thread's session back in D1 when the turn
+ends. See [`runner/README.md`](runner/README.md) for the systemd unit and the bounds.
 
-- **E2B** ([e2b.dev](https://e2b.dev)): sign up, then make a key on the dashboard. New accounts get
-  $100 of credit. The Hobby plan stops a sandbox after 1 hour of continuous running, so a single
-  turn is limited to 45 minutes by default.
-- **Impello** ([impello.ai](https://www.impello.ai)): sign up at
-  [dashboard.impello.ai](https://dashboard.impello.ai/sign-up), then make a key on the API Keys tab.
-  7-day free trial.
-
-To switch later, run `npm run setup` again and pick the other one.
+- **What it needs**: Node 22, the `claude` CLI, and an itch to stay on. ~1 GB of RAM per turn
+  (one at a time), a few GB of disk for the checkouts.
+- **What it costs**: nothing per turn. The Worker's side is a database insert.
+- **If it is off**: messages queue in D1 and run when it comes back. Nothing is lost, an answer is
+  just late.
 
 ### Which Claude sign-in?
 
@@ -110,7 +111,7 @@ sign-in with that in mind. Three things follow from it:
   later thread in that channel. Read the memory repo now and then, and delete what is wrong.
 - **Routines outlive the thread, and have no limits.** Anyone can make one, at any frequency (every
   minute is allowed), and it runs until someone pauses or deletes it. Each run is a whole Claude turn
-  in a sandbox, so it costs money or plan usage. Check `routine list` in each channel, or the web UI.
+  on your machine, so it costs plan usage and your own CPU. Check `routine list` in each channel, or the web UI.
 - **The web UI sees everything**, private channels and channel secrets' names included. It is behind
   Cloudflare Access with a policy that lets in only you; keep it that way ([Web UI](#web-ui)).
 
@@ -151,17 +152,18 @@ target `main`, and tick **Require a pull request before merging**. The bot is to
 `main`, but a rule is what actually stops it.
 
 What the bot's GitHub token can do: it lasts 1 hour, reaches only the repos you picked in step 6
-**except the memory repo**, and can only read and write code and pull requests. The sandbox never
-gets a token for the memory repo; see [Memory](#memory).
+**except the memory repo**, and can only read and write code and pull requests. A turn never gets a
+token for the memory repo; see [Memory](#memory).
 
 ## How it works
 
-- **One sandbox per thread.** The Worker finds a thread's sandbox by the thread id stored on the
-  sandbox itself, so no database is needed. The Claude session id is made from the thread id, so
-  `claude --resume` finds the conversation the same way.
-- **Paused, not deleted.** 5 minutes after a thread goes quiet, its sandbox is paused. A paused
-  sandbox costs no compute and keeps its disk, so the next message in the thread resumes it in a
-  few seconds with its history and files.
+- **One workspace per thread.** On the runner each thread has its own directory (`~/work` for the
+  checkout, `~/.claude` for the session), and its own `HOME`, so two threads cannot see each other's
+  files or conversation. The Claude session id is made from the thread id, so `claude --resume`
+  finds the conversation.
+- **The session lives in D1.** After each turn the runner uploads the thread's Claude session to
+  `session_chunks` (gzipped, chunked under D1's 2 MB row limit) and downloads it again before the
+  next turn, so the machine can be restarted, or replaced, without losing a thread.
 - **One turn at a time.** Each thread has a Cloudflare Durable Object that lets one Claude turn run at a
   time. A message with files that arrives during a turn gets an ⏳ and goes into the next turn.
 - **Follow-ups reach the running turn.** A plain follow-up sent while Claude works ("actually, use
@@ -244,8 +246,10 @@ gets a token for the memory repo; see [Memory](#memory).
 | `src/thread.ts` | The thread rules: one turn at a time, dedupe, mid-turn follow-ups, when to pause |
 | `src/thread-state.ts` | The Durable Object that stores a thread and runs its alarm |
 | `src/thread-stub.ts` | Finds a thread's Durable Object by its channel and thread |
-| `src/turn.ts` | Starts one turn: prompt, tokens, launch |
-| `src/sandbox.ts` | E2B / Impello: find, create, pause, launch |
+| `src/turn.ts` | Builds one turn: prompt, tokens, the job |
+| `src/runner-jobs.ts` | The turn queue and the sessions: claim, lease, finish, chunk |
+| `src/runner-doors.ts` | The doors your machine knocks on: `/runner/next`, `/lease`, `/finish`, `/box`, `/session` |
+| `runner/runner-daemon.mjs` | The machine side: poll, restore the session, run the turn, put it back |
 | `src/github.ts` | GitHub App tokens: the turn's (every repo but memory) and the memory repo's |
 | `src/memory.ts` | The memory rules: one folder per channel, which paths sync, merging two threads' notes |
 | `src/memory-store.ts` | Reads and commits a channel's memory folder through GitHub's API |
@@ -429,7 +433,7 @@ and routines, plus the viewer's own DM with the bot.
 
 ## Transcript backups
 
-Every turn's transcript is copied to the R2 bucket `slack-agent-transcripts` and **never deleted**:
+Every turn's transcript is copied to the R2 bucket `slack-agent-runner-transcripts` and **never deleted**:
 the bucket has no lifecycle rule. Transcripts are small (gzipped text) and R2 storage is cheap, but
 it grows with every turn. To keep less, add a lifecycle rule to the bucket in the Cloudflare
 dashboard (R2 > the bucket > Settings > Object lifecycle rules).
@@ -440,9 +444,8 @@ In `wrangler.jsonc` under `vars`. Run `npm run deploy` after you change one.
 
 | Var | Default | What it does |
 |---|---|---|
-| `MAX_TURN_MINUTES` | 45 | How long one turn may run. Keep it under 50 on E2B Hobby. |
-| `IDLE_PAUSE_MINUTES` | 5 | How long a thread may be quiet before its sandbox pauses. |
-| `SANDBOX_TEMPLATE` | `slack-agent` | The sandbox image name. |
+| `MAX_TURN_MINUTES` | 45 | How long one turn may run, from when the thread started it. |
+| `IDLE_PAUSE_MINUTES` | 5 | How long a thread may be quiet before the alarm records it as paused. |
 | `MEMORY_REPO` | (set by setup) | The memory repo, `owner/name`. Required. |
 | `UI_HOST` | (set by setup) | The web UI's own hostname, a custom domain on the Worker (also in `routes`). Empty: no web UI. |
 | `ACCESS_TEAM_DOMAIN` | (set by setup) | The web UI's Cloudflare Access team, `<team>.cloudflareaccess.com`. Empty: the UI refuses everyone. |
@@ -479,7 +482,7 @@ In `wrangler.jsonc` under `vars`. Run `npm run deploy` after you change one.
   `wrangler.jsonc` back to `[]`.
 - **Slack stopped reaching the Worker after Access went on:** Access covers the `workers.dev`
   address. Turn off the Worker's workers.dev Cloudflare Access switch (Settings > Domains & Routes)
-  and put Access on `UI_HOST` only; `curl <worker>/` must answer "slack-agent is running".
+  and put Access on `UI_HOST` only; `curl <worker>/` must answer "slack-agent-runner is running".
 - **The Home tab is empty or says "This is still being worked on":** reinstall the app from the
   manifest (it turns on `home_tab_enabled` and subscribes to `app_home_opened`).
 - **"Invalid API key" from Claude:** the Claude secret is wrong or expired. Run

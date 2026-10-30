@@ -14,6 +14,8 @@ import { checkFollowAction, followRefusal, prName } from './pr-follow.ts'
 import { githubWebhook, sweepPrFollows } from './pr-follow-fire.ts'
 import { followPr, unfollowPr } from './pr-follow-store.ts'
 import { sweepRoutines } from './routine-fire.ts'
+import { BOX_FILES, BOX_VERSION } from './box-src.ts'
+import { runnerDoor } from './runner-doors.ts'
 import { createRoutine, deleteRoutine, listRoutines, setRoutineStatus } from './routine-store.ts'
 import { checkRoutineAction, checkTimezone, routineView } from './routines.ts'
 import { checkSearch, normalise, publicOnly, resultsOf, searchArgs, searchErrorHint } from './search.ts'
@@ -49,6 +51,8 @@ export { ThreadState } from './thread-state.ts'
  *                           tools token (src/pr-follow.ts).
  *   POST /sandbox/code-channel  Claude opening and driving a Slack code channel (beta), same tools
  *                           token: create, post, view, status, archive, summary (src/code-channels.ts).
+ *   /runner/*              Your own machine's doors when RUNNER_SECRET is set (src/runner-doors.ts):
+ *                           the turn queue, the lease, the runner bundle and the sessions.
  *   POST /github/webhook    GitHub App events, signed with GITHUB_WEBHOOK_SECRET: CI failures,
  *                           reviews and comments on a followed PR, and its merge or close.
  *   GET|POST /ui/*          The web UI and its API, behind Cloudflare Access: transcripts (R2 backups
@@ -76,9 +80,10 @@ export default {
     if (request.method === 'POST' && url.pathname === '/sandbox/routines') return sandboxRoutines(request, env)
     if (request.method === 'POST' && url.pathname === '/sandbox/follow-pr') return sandboxFollowPr(request, env)
     if (request.method === 'POST' && url.pathname === '/sandbox/code-channel') return sandboxCodeChannel(request, env)
+    if (url.pathname.startsWith('/runner/')) return runnerDoor(request, env, url, { version: BOX_VERSION, files: BOX_FILES })
     if (request.method === 'POST' && url.pathname === '/github/webhook') return githubWebhook(request, env)
     if (url.pathname === '/ui' || url.pathname.startsWith('/ui/')) return uiRoute(request, env)
-    if (url.pathname === '/') return new Response('slack-agent is running. Point Slack at /slack/events.\n')
+    if (url.pathname === '/') return new Response('slack-agent-runner is running. Point Slack at /slack/events.\n')
     return new Response('not found', { status: 404 })
   },
 

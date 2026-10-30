@@ -5,7 +5,7 @@ import { manifestFor } from './files.ts'
 import { githubMissing, mintTurnToken } from './github.ts'
 import { buildPrompt, sessionIdFor } from './prompt.ts'
 import { modelId } from './models.ts'
-import { launchTurn } from './sandbox.ts'
+import { enqueueTurn as queueOnRunner, type Launch } from './runner-jobs.ts'
 import { deleteMessage, postInThread, postMessage, react, threadHistory } from './slack.ts'
 import { followUrl, statusBlocks, statusLine } from './status.ts'
 import { threadStub } from './thread-state.ts'
@@ -87,7 +87,7 @@ export async function runTurnJob(env: Env, job: TurnJob, attempt: number, maxAtt
     // A grant per file the turn's messages carried; the runner swaps them for the bytes.
     const files = await manifestFor(env.CALLBACK_SECRET, { channel, threadTs, exp: claims.exp, messages: turn.messages })
 
-    await launchTurn(env, {
+    const launch: Launch = {
       channel,
       threadTs,
       turnId: turn.turnId,
@@ -107,7 +107,10 @@ export async function runTurnJob(env: Env, job: TurnJob, attempt: number, maxAtt
       channelEnvs: secrets.envs,
       githubToken,
       deadline,
-    })
+    }
+    // The turn waits in D1 for a machine of your own (src/runner-jobs.ts). Nothing is started here:
+    // the Worker answers at once and the machine picks the job up, so a turn can outlive any request.
+    await queueOnRunner(env, launch)
   } catch (err) {
     // A wrong key or a missing secret fails the same way on every retry; say so at once.
     const fatal = err instanceof Fatal || (err as Error)?.name === 'AuthenticationError'

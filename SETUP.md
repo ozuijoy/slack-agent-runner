@@ -14,18 +14,17 @@ a secret.
 - Run `npm install`.
 - Run `npx wrangler whoami`. If it says the human is not logged in, ask them to run
   `npx wrangler login` themselves (it opens a browser). Wait for them to say it is done.
-- Tell the human: their Cloudflare account must be on **Workers Paid** ($5/month):
-  dash.cloudflare.com > Workers & Pages > Plans. The free plan does not work. R2 must be turned on
-  too: dash.cloudflare.com > R2 > Purchase / Get started (it has a free allowance).
+- Tell the human: the free plan is enough now, because a turn is one database insert; the work runs
+  on their machine. R2 must be turned on first: dash.cloudflare.com > R2 > Purchase / Get started
+  (it has a free allowance).
+- Tell them the turns need a machine they control (a laptop, a mini PC, a VPS) with Node 22 and the
+  `claude` CLI on it. That is where `runner/runner-daemon.mjs` runs; see `runner/README.md`.
 
-## 2. Ask two questions
+## 2. Ask one question
 
-Ask each one on its own, with these options, and wait for the answer.
+Ask it on its own, with these options, and wait for the answer.
 
-1. **Which sandbox provider: E2B or Impello?** Each Slack thread gets its own cloud computer from it.
-   - E2B (e2b.dev): $100 of free credit on sign-up. Keys at https://e2b.dev/dashboard.
-   - Impello (impello.ai): 7-day free trial. Keys at https://dashboard.impello.ai (API Keys tab).
-2. **How does the bot sign in to Claude?**
+**How does the bot sign in to Claude?**
    - Their Claude Pro or Max plan: they run `claude setup-token` and copy the token. Tell them:
      Anthropic's terms allow a plan token for their own use of Claude Code, so the bot must stay in a
      workspace or channel only they use.
@@ -35,8 +34,7 @@ Ask each one on its own, with these options, and wait for the answer.
 ## 3. Make the file, and have the human fill it in
 
 - Copy `.env.setup.example` to `.env.setup`.
-- Write the provider they picked into `SANDBOX_PROVIDER` (`e2b` or `impello`). That is not a secret.
-- Ask the human to open `.env.setup` in their editor and paste in `SANDBOX_API_KEY` and ONE of
+- Ask the human to open `.env.setup` in their editor and paste in ONE of
   `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`, then save it and tell you. Leave the Slack, GitHub,
   `MEMORY_REPO`, `UI_HOST` and `ACCESS_*` lines empty for now.
 
@@ -46,17 +44,16 @@ Ask each one on its own, with these options, and wait for the answer.
 npm run setup -- --file .env.setup
 ```
 
-It builds the sandbox image (a few minutes the first time), creates the queue, the R2 bucket for
+It creates the queue, the R2 bucket for
 transcript backups and the D1 database (and applies `migrations/`), deploys the Worker (which also
 turns on its every-minute Cron Trigger for routines), stores the secrets,
-and writes `slack-manifest.local.json` with the Worker URL in it. It makes three random secrets
-itself, once: `CALLBACK_SECRET`, `CHANNEL_SECRETS_KEY` and `GITHUB_WEBHOOK_SECRET`. The last one
-GitHub needs too, so setup also writes it into `GITHUB_WEBHOOK_SECRET` in `.env.setup` for the human
-to copy in step 6. Do not read it or print it yourself. It ends with `NEXT:` lines. Read
+and writes `slack-manifest.local.json` with the Worker URL in it. It makes four random secrets
+itself, once: `CALLBACK_SECRET`, `CHANNEL_SECRETS_KEY`, `RUNNER_SECRET` and `GITHUB_WEBHOOK_SECRET`.
+`RUNNER_SECRET` goes into `.env.setup` too, because the machine that runs the turns needs the same
+string (step 8). `GITHUB_WEBHOOK_SECRET` GitHub needs, so setup writes it into `.env.setup` for the
+human to copy in step 6. Do not read it or print it yourself. It ends with `NEXT:` lines. Read
 them and do what they say. If a step fails, the `NEXT:` line says why; fix that and run it again.
 Running it again is always safe.
-
-To skip the image build on later runs, add `--skip-template`.
 
 ## 5. The Slack app (the human does this)
 
@@ -69,7 +66,7 @@ Walk the human through it:
    **Bot User OAuth Token**, `xoxb-...` (OAuth & Permissions page), into `SLACK_BOT_TOKEN` in
    `.env.setup`.
 
-Then run `npm run setup -- --file .env.setup --skip-template` again. After it finishes, the human
+Then run `npm run setup -- --file .env.setup` again. After it finishes, the human
 opens **Event Subscriptions** in the Slack app and clicks **Retry** if the Request URL is not marked
 Verified. The manifest also turns on **Interactivity** with the Request URL `<worker>/slack/interactive`
 (it carries the Stop button's clicks); nothing to do there unless the Worker URL changes.
@@ -93,10 +90,28 @@ start until it is done. Walk the human through "GitHub App" in the README:
    again after the first run), the Worker already holds a secret nobody can read back: they make a
    new long random string, put it in both the App and `GITHUB_WEBHOOK_SECRET`, and setup stores it.
 
-Then run setup again with `--skip-template`. Remind them to protect `main` in the repos the bot
+Then run setup again. Remind them to protect `main` in the repos the bot
 works in.
 
-## 7. The web UI behind Cloudflare Access (optional; the human does this)
+## 7. The machine that runs the turns (required)
+
+Nothing runs a turn until this machine is up. It is the human's own computer, a mini PC, or a small
+VPS: anything with Node 22 and the `claude` CLI installed (`claude --version` answers). The turn
+takes its Claude sign-in from the Worker's secrets, so the CLI only has to exist there.
+
+Start it with the Worker URL and the SAME `RUNNER_SECRET` that setup wrote into `.env.setup`:
+
+```bash
+export WORKER_ORIGIN=https://<worker>.workers.dev
+export RUNNER_SECRET=...            # the RUNNER_SECRET line in .env.setup
+npm run runner                      # node runner/runner-daemon.mjs
+```
+
+Keep it running with systemd, launchd or tmux (the unit file is in `runner/README.md`). Check it: the
+log says `runner <host> polling <worker>`, and a Slack message prints `turn <id> starting` within
+25 seconds. If the machine is off, messages queue in D1 and run when it comes back.
+
+## 8. The web UI behind Cloudflare Access (optional; the human does this)
 
 The web UI (`/ui`: live transcripts, routines, channel settings and secrets) is only reachable
 through Cloudflare Access, and the Worker checks Access's signed token as well. Until this is done
@@ -110,7 +125,7 @@ UI button. The bot works fine without it. Walk the human through README "Web UI"
    OFF. No domain on Cloudflare: stop here, the UI stays off.
 2. They pick a NEW subdomain of that domain for the UI, for example `agent.example.com` (one with
    no DNS record yet). You write it into `UI_HOST` in `.env.setup` (not a secret) and run setup
-   again with `--skip-template`. Setup puts it into `UI_HOST` and `routes` in `wrangler.jsonc`, and
+   again. Setup puts it into `UI_HOST` and `routes` in `wrangler.jsonc`, and
    the deploy attaches it to the Worker as a custom domain. Slack and GitHub stay on `workers.dev`.
 3. In the Cloudflare dashboard: **Zero Trust > Access > Applications > Add an application >
    Self-hosted**. Hostname: the `UI_HOST` subdomain, path left empty (the whole host is the UI's).
@@ -119,10 +134,10 @@ UI button. The bot works fine without it. Walk the human through README "Web UI"
    `ACCESS_AUD` in `.env.setup`, and the team domain (**Zero Trust > Settings**,
    `<team>.cloudflareaccess.com`) into `ACCESS_TEAM_DOMAIN`. Neither is a secret; you may write them.
 
-Then run setup again with `--skip-template`. Check both halves yourself:
+Then run setup again. Check both halves yourself:
 
 ```bash
-curl -s <worker>/                    # must say "slack-agent is running": Slack still reaches the Worker
+curl -s <worker>/                    # must say "slack-agent-runner is running": Slack still reaches the Worker
 curl -sI https://<UI_HOST>/ui/ | head -3   # must redirect to <team>.cloudflareaccess.com: the UI is behind Access
 curl -sI <worker>/ui/ | head -3      # must redirect to https://<UI_HOST>/ui/: workers.dev never serves the UI
 grep '"WORKER_URL"' wrangler.jsonc   # must be <worker>: a routine made on the UI reports back there, not to UI_HOST
@@ -130,9 +145,9 @@ grep '"WORKER_URL"' wrangler.jsonc   # must be <worker>: a routine made on the U
 
 Then the human opens `https://<UI_HOST>/ui/` in a browser, signs in, and sees the Threads page.
 
-## 8. Test it
+## 9. Test it
 
-- Ask the human to invite the bot to a channel (`/invite @percy-jr`) and @mention it with a question.
+- Ask the human to invite the bot to a channel (`/invite @slack-agent-runner`) and @mention it with a question.
 - Run `npx wrangler tail --format pretty` while they do, and read it together. A 👀 on their message
   means the turn started. A status message with a **Stop** button appears under it and updates with
   what Claude is doing; the answer arrives in the thread and the status message goes away.
@@ -152,7 +167,7 @@ Then the human opens `https://<UI_HOST>/ui/` in a browser, signs in, and sees th
 - Ask them to tell the bot something worth keeping ("remember that we deploy with `npm run ship`"),
   then ask about it in a NEW thread in the same channel. The memory repo shows a commit named for
   the channel, and the new thread knows the answer.
-- If the web UI is set up (step 7): while a turn runs, ask them to click **Follow along** on the status message: the transcript page
+- If the web UI is set up (step 8): while a turn runs, ask them to click **Follow along** on the status message: the transcript page
   shows the turn's prompt and each tool call as it happens, and the finished turns from R2 once it
   ends. Then ask them to open the bot's **Home** tab in Slack: recent threads, routines and an
   "Open the web UI" button.
@@ -160,7 +175,7 @@ Then the human opens `https://<UI_HOST>/ui/` in a browser, signs in, and sees th
   without an @mention then gets an answer.
 - If nothing happens, see "When something goes wrong" in the README.
 
-## 9. Finish
+## 10. Finish
 
 - Tell the human `.env.setup` can be deleted now (the secrets are stored in Cloudflare, and the
   webhook secret is in the GitHub App), and offer to delete it. Check with them first that they copied

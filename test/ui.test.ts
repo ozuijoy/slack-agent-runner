@@ -151,7 +151,7 @@ test('the manifest turns on the Home tab and subscribes to app_home_opened', () 
 test('rule 5: the UI lives on its own custom host, never workers.dev, and needs Access too', () => {
   assert.equal(normaliseUiHost('agent.example.com'), 'agent.example.com')
   assert.equal(normaliseUiHost(' https://Agent.Example.com/ '), 'agent.example.com')
-  assert.equal(normaliseUiHost('slack-agent.me.workers.dev'), null, 'Access cannot cover only /ui on workers.dev')
+  assert.equal(normaliseUiHost('slack-agent-runner.me.workers.dev'), null, 'Access cannot cover only /ui on workers.dev')
   assert.equal(normaliseUiHost('workers.dev'), null)
   assert.equal(normaliseUiHost('agent.example.com/ui'), null)
   assert.equal(normaliseUiHost('agent.example.com:8443'), null)
@@ -163,7 +163,7 @@ test('rule 5: the UI lives on its own custom host, never workers.dev, and needs 
   assert.equal(uiOrigin({ ...access, UI_HOST: 'agent.example.com' }), 'https://agent.example.com')
   assert.equal(uiOrigin({ ...access, UI_HOST: '' }), null, 'Access alone is not enough: there is no host to put it on')
   assert.equal(uiOrigin({ UI_HOST: 'agent.example.com' }), null, 'a host without Access is not set up')
-  assert.equal(uiOrigin({ ...access, UI_HOST: 'slack-agent.me.workers.dev' }), null)
+  assert.equal(uiOrigin({ ...access, UI_HOST: 'slack-agent-runner.me.workers.dev' }), null)
 })
 
 test('rule 5: wrangler.jsonc keeps workers.dev for Slack and has the slots setup fills for the UI host', () => {
@@ -175,12 +175,12 @@ test('rule 5: wrangler.jsonc keeps workers.dev for Slack and has the slots setup
 
 test('rule 6: a routine made on the UI reports to WORKER_URL, never to the Access-guarded UI host', () => {
   const ui = { UI_HOST: 'agent.example.com', ACCESS_TEAM_DOMAIN: 'myteam', ACCESS_AUD: 'a'.repeat(64) }
-  const worker = 'https://slack-agent.me.workers.dev'
+  const worker = 'https://slack-agent-runner.me.workers.dev'
   assert.equal(workerOrigin({ ...ui, WORKER_URL: worker }), worker)
   assert.notEqual(workerOrigin({ ...ui, WORKER_URL: worker }), uiOrigin(ui))
   assert.equal(workerOrigin({ ...ui, WORKER_URL: `${worker}/` }), worker, 'trimmed to the origin')
   assert.equal(workerOrigin({ ...ui, WORKER_URL: 'https://agent.example.com' }), null, 'the UI host is never a job origin')
-  assert.equal(workerOrigin({ ...ui, WORKER_URL: 'http://slack-agent.me.workers.dev' }), null)
+  assert.equal(workerOrigin({ ...ui, WORKER_URL: 'http://slack-agent-runner.me.workers.dev' }), null)
   assert.equal(workerOrigin({ ...ui, WORKER_URL: '' }), null)
   assert.equal(workerOrigin(ui), null)
 

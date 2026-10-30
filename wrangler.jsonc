@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "slack-agent",
+  "name": "slack-agent-runner",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -12,48 +12,44 @@
   "routes": [],
   "observability": { "enabled": true },
 
-  // Workers Paid. A turn launch talks to the sandbox provider several times and the
-  // pause call can take over a minute, which the free plan's 10 ms of CPU cannot fit.
-  "limits": { "cpu_ms": 300000 },
-
-  // One object per Slack thread. It is the lock that keeps one Claude turn running
-  // per thread, and its alarm pauses the thread's sandbox once the thread goes quiet.
+  // One object per Slack thread. It is the lock that keeps one Claude turn running per thread, and
+  // its alarm is the thread's clock: it retries a job the queue refused, and notices a turn that
+  // stopped without a reply. Turns themselves run on your machine (runner/README.md).
   "durable_objects": { "bindings": [{ "name": "THREADS", "class_name": "ThreadState" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ThreadState"] }],
 
-  // Slack wants an answer in 3 seconds; starting a sandbox takes longer. The events
-  // route answers at once and this queue does the launch, with retries.
+  // Slack wants an answer in 3 seconds. The events route answers at once and this queue does the
+  // work, with retries; a turn that fails is retried, and it is only a database insert.
   "queues": {
-    "producers": [{ "binding": "TURNS", "queue": "slack-agent-turns" }],
-    "consumers": [{ "queue": "slack-agent-turns", "max_batch_size": 1, "max_retries": 3 }]
+    "producers": [{ "binding": "TURNS", "queue": "slack-agent-runner-turns" }],
+    "consumers": [{ "queue": "slack-agent-runner-turns", "max_batch_size": 1, "max_retries": 3 }]
   },
 
   // Routines, channel settings and the transcript index. `npm run setup` creates the database,
   // writes its id here, and applies the SQL files in migrations/.
   "d1_databases": [
-    { "binding": "DB", "database_name": "slack-agent", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "slack-agent-runner", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
   ],
 
-  // Every turn's Claude transcript, copied out of the sandbox after the turn. Kept forever: the
-  // bucket has no lifecycle rule. `npm run setup` creates it.
-  "r2_buckets": [{ "binding": "TRANSCRIPTS", "bucket_name": "slack-agent-transcripts" }],
+  // Every turn's Claude transcript, uploaded by the turn itself. Kept forever: the bucket has no
+  // lifecycle rule. `npm run setup` creates it.
+  "r2_buckets": [{ "binding": "TRANSCRIPTS", "bucket_name": "slack-agent-runner-transcripts" }],
 
   // Routines (src/routines.ts): every minute the Worker fires the routines that are due. Created by
   // the deploy, which `npm run setup` runs. Minute precision is what lets a routine run that often.
   "triggers": { "crons": ["* * * * *"] },
 
-  // The script the sandbox runs for each turn, and the instructions Claude reads there. And the web
-  // UI's page, script and styles (ui/), served by the Worker behind Cloudflare Access.
+  // The script your machine runs for each turn, and the instructions Claude reads there: shipped as
+  // text so GET /runner/box can hand them over (src/box-src.ts). And the web UI's page, script and
+  // styles (ui/), served by the Worker behind Cloudflare Access.
   "rules": [{ "type": "Text", "globs": ["**/box/*.md", "**/box/*.mjs", "**/ui/*.html", "**/ui/*.js", "**/ui/*.css"], "fallthrough": true }],
 
+  // RUNNER_SECRET is the one secret this Worker needs to reach a turn: `wrangler secret put
+  // RUNNER_SECRET`, the same string your machine is started with (runner/README.md).
   "vars": {
-    // "e2b" or "impello". `npm run setup` sets this for you.
-    "SANDBOX_PROVIDER": "e2b",
-    "SANDBOX_TEMPLATE": "slack-agent",
-    // How long one Claude turn may run. Keep it under 50 minutes on E2B Hobby,
-    // which stops a sandbox after 1 hour of continuous running.
+    // How long one Claude turn may run, counted from when the thread started the turn.
     "MAX_TURN_MINUTES": "45",
-    // How long a thread may sit quiet before its sandbox is paused.
+    // How long a thread may sit quiet before the alarm records it as paused.
     "IDLE_PAUSE_MINUTES": "5",
     // The bot's memory: a private GitHub repo, owner/name, with the GitHub App installed on it.
     // One folder per Slack channel (src/memory.ts). `npm run setup` sets this for you.

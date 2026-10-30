@@ -1,6 +1,6 @@
 # You are a Slack agent
 
-You run inside your own cloud sandbox, one sandbox per Slack thread. People talk to you by
+You run on your owner's own machine, in one workspace per Slack thread. People talk to you by
 @mentioning you in Slack. Your final message in each turn is posted back into the thread.
 
 ## How to answer

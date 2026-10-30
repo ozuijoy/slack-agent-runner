@@ -141,10 +141,10 @@ test('the search door takes the thread from the tools token and the action token
   assert.match(door, /searchView\(turnId\)/)
   assert.match(door, /publicOnly\(/)
   assert.doesNotMatch(door, /body\??\.(channel|threadTs|thread_ts|action_token|actionToken|channel_types)/)
-  // The sandbox launch never carries the action token.
+  // The turn's launch, and the job it becomes, never carry the action token.
   const turn = readFileSync(join(root, 'src', 'turn.ts'), 'utf8')
-  const sandbox = readFileSync(join(root, 'src', 'sandbox.ts'), 'utf8')
-  assert.doesNotMatch(turn + sandbox, /actionToken|action_token/)
+  const jobs = readFileSync(join(root, 'src', 'runner-jobs.ts'), 'utf8')
+  assert.doesNotMatch(turn + jobs, /actionToken|action_token/)
 })
 
 test('search on the command line: one quoted query and an optional limit', () => {

@@ -54,7 +54,7 @@ export function githubHeaders(token: string) {
     authorization: `Bearer ${token}`,
     accept: 'application/vnd.github+json',
     'x-github-api-version': '2022-11-28',
-    'user-agent': 'slack-agent-starter',
+    'user-agent': 'slack-agent-runner',
   }
 }
 

@@ -17,17 +17,19 @@ export interface Env {
   SLACK_SIGNING_SECRET: string
   SLACK_BOT_TOKEN: string
 
-  // Sandbox provider
-  SANDBOX_PROVIDER: string
-  SANDBOX_API_KEY: string
-  SANDBOX_TEMPLATE: string
-
   // Claude: set ONE of these. See the README on which to pick.
   CLAUDE_CODE_OAUTH_TOKEN?: string
   ANTHROPIC_API_KEY?: string
 
   // Signs the token a sandbox uses to post its reply back. Any long random string.
   CALLBACK_SECRET: string
+
+  /**
+   * The string your machine uses to reach the /runner doors (runner/runner-daemon.mjs): the queue,
+   * the lease, the bundle and the sessions. One long random string, the same on both sides. Unset,
+   * every door answers 401 and no turn can run, because there is no sandbox to fall back to.
+   */
+  RUNNER_SECRET: string
 
   // Encrypts per-channel secrets in D1 (src/channels.ts). 64 hex characters, made once by
   // `npm run setup`. Changing it makes every stored channel secret unreadable.

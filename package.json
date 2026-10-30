@@ -1,26 +1,23 @@
 {
-  "name": "slack-agent-starter",
+  "name": "slack-agent-runner",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "@mention it in Slack and it runs Claude Code in a cloud sandbox, then replies in the thread. Runs on Cloudflare Workers.",
+  "description": "@mention it in Slack and it runs Claude Code on your own machine, then replies in the thread. The Worker is on Cloudflare; the turns are not.",
   "license": "MIT",
   "engines": {
     "node": ">=22.6"
   },
   "scripts": {
     "setup": "node --experimental-strip-types --no-warnings scripts/setup.mjs",
-    "template:build": "node --experimental-strip-types --no-warnings scripts/build-template.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
+    "runner": "node runner/runner-daemon.mjs",
     "scan": "node scripts/scan-private-names.mjs"
   },
-  "dependencies": {
-    "@impello/sdk": "0.3.1",
-    "e2b": "2.55.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261023.1",
     "@types/node": "26.6.5",

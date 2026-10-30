@@ -5,8 +5,8 @@ import { test } from 'node:test'
 import { parseEnvFile, setEnvLine, webhookSecretPlan } from '../scripts/env-file.ts'
 
 test('the answers file: quotes stripped, comments and empty values skipped', () => {
-  const text = '# a comment\nSANDBOX_PROVIDER=e2b\nMEMORY_REPO="you/my-bot-memory"\nGITHUB_WEBHOOK_SECRET=\nnot a line\n'
-  assert.deepEqual(parseEnvFile(text), { SANDBOX_PROVIDER: 'e2b', MEMORY_REPO: 'you/my-bot-memory' })
+  const text = '# a comment\nMAX_TURN_MINUTES=45\nMEMORY_REPO="you/my-bot-memory"\nGITHUB_WEBHOOK_SECRET=\nnot a line\n'
+  assert.deepEqual(parseEnvFile(text), { MAX_TURN_MINUTES: '45', MEMORY_REPO: 'you/my-bot-memory' })
 })
 
 test('setEnvLine fills the empty line in place and leaves every other line alone', () => {

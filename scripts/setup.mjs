@@ -18,13 +18,12 @@ import { parseEnvFile, setEnvLine, webhookSecretPlan } from './env-file.ts'
 import { generatedSecretsToCreate, parseSecretList } from './secret-list.ts'
 
 const WRANGLER = ['npx', '--yes', 'wrangler']
-const QUEUE = 'slack-agent-turns'
+const QUEUE = 'slack-agent-runner-turns'
 // Must match wrangler.jsonc.
-const BUCKET = 'slack-agent-transcripts'
-const DATABASE = 'slack-agent'
+const BUCKET = 'slack-agent-runner-transcripts'
+const DATABASE = 'slack-agent-runner'
 const fileArg = process.argv.indexOf('--file')
 const FILE = fileArg !== -1 ? process.argv[fileArg + 1] : null
-const SKIP_TEMPLATE = process.argv.includes('--skip-template')
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`
 const dim = (s) => `\x1b[2m${s}\x1b[0m`
@@ -111,13 +110,8 @@ if (FILE) {
   answers = await askEverything()
 }
 
-const provider = (answers.SANDBOX_PROVIDER ?? '').toLowerCase()
-if (provider !== 'e2b' && provider !== 'impello') {
-  console.error('NEXT: set SANDBOX_PROVIDER to "e2b" or "impello", then run again.')
-  process.exit(1)
-}
 const claudeName = answers.ANTHROPIC_API_KEY ? 'ANTHROPIC_API_KEY' : answers.CLAUDE_CODE_OAUTH_TOKEN ? 'CLAUDE_CODE_OAUTH_TOKEN' : null
-const missing = [...(answers.SANDBOX_API_KEY ? [] : ['SANDBOX_API_KEY']), ...(claudeName ? [] : ['CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY'])]
+const missing = claudeName ? [] : ['CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY']
 if (missing.length) {
   console.error(`NEXT: fill in ${missing.join(', ')}${FILE ? ` in ${FILE}` : ''}, then run again.`)
   process.exit(1)
@@ -133,21 +127,7 @@ if (!whoami.ok || /not authenticated|not logged in/i.test(whoami.out)) {
   }
   wrangler(['login'])
 }
-console.log(dim('  Workers Paid must be on: dash.cloudflare.com > Workers & Pages > Plans.'))
-
-step(`Sandbox template on ${provider}`)
-setVar('SANDBOX_PROVIDER', provider)
-if (SKIP_TEMPLATE) {
-  console.log('  skipped (--skip-template)')
-} else {
-  const build = run('npm', ['run', '-s', 'template:build'], {
-    env: { ...process.env, SANDBOX_PROVIDER: provider, SANDBOX_API_KEY: answers.SANDBOX_API_KEY },
-  })
-  if (!build.ok) {
-    console.error('NEXT: the template build failed. Check SANDBOX_PROVIDER and SANDBOX_API_KEY, then run again.')
-    process.exit(1)
-  }
-}
+console.log(dim('  The free plan is enough: a turn is one database insert, and the work runs on your machine.'))
 
 // The memory repo is a plain var (not a secret), so it goes into wrangler.jsonc before the deploy.
 const MEMORY_REPO_RE = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/
@@ -258,13 +238,26 @@ try {
   console.error('NEXT: `wrangler secret list` failed or printed something setup cannot read, so no secret was written. Check `npx wrangler secret list` works (and `npx wrangler whoami`), then run setup again.')
   process.exit(1)
 }
-putSecret('SANDBOX_API_KEY', answers.SANDBOX_API_KEY)
 putSecret(claudeName, answers[claudeName])
 // The Worker prefers ANTHROPIC_API_KEY when both are stored (src/env.ts claudeAuth), so switching to
 // a plan token only works once the old key is gone. The reverse is deleted too, to keep one sign-in.
 const otherClaude = claudeName === 'ANTHROPIC_API_KEY' ? 'CLAUDE_CODE_OAUTH_TOKEN' : 'ANTHROPIC_API_KEY'
 if (have.has(otherClaude)) deleteSecret(otherClaude)
 for (const name of toGenerate) putSecret(name, randomBytes(32).toString('hex'))
+
+// The machine that runs turns authenticates with this, and wrangler can never read a secret back, so
+// a generated one is written to the answers file for the human to copy across (runner/README.md).
+if (!have.has('RUNNER_SECRET')) {
+  const secretFile = FILE ?? '.env.setup'
+  const value = randomBytes(32).toString('hex')
+  writeFileSync(secretFile, setEnvLine(existsSync(secretFile) ? readFileSync(secretFile, 'utf8') : '', 'RUNNER_SECRET', value), { mode: 0o600 })
+  putSecret('RUNNER_SECRET', value)
+  next.push(
+    `Setup made RUNNER_SECRET and wrote it into RUNNER_SECRET in ${secretFile} (git-ignored; do not read it aloud). ` +
+      'The machine that runs the turns needs it: start runner/runner-daemon.mjs there with RUNNER_SECRET set to that value, ' +
+      'or nothing can pick up a turn (runner/README.md).',
+  )
+}
 
 const next = []
 if (workerUrl) {
@@ -350,7 +343,7 @@ if (next.length) {
   for (const n of next) console.log(`NEXT: ${n}`)
 } else {
   console.log("NEXT: the Slack app's Event Subscriptions page must show the Request URL as Verified (click Retry if not).")
-  console.log('NEXT: invite the bot to a channel (/invite @percy-jr) and @mention it. Watch it with `npx wrangler tail`.')
+  console.log('NEXT: invite the bot to a channel (/invite @slack-agent-runner) and @mention it. Watch it with `npx wrangler tail`.')
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -358,16 +351,10 @@ if (next.length) {
 
 async function askEverything() {
   console.log(bold('\nSlack agent setup\n'))
-  console.log('You need: Cloudflare on Workers Paid ($5/month), a Slack workspace where you can install apps,')
-  console.log('and a Claude plan or an Anthropic API key. Tip: your coding agent can do this for you; see SETUP.md.')
+  console.log('You need: a Cloudflare account (the free plan is enough), a machine to run the turns on,')
+  console.log('a Slack workspace where you can install apps, and a Claude plan or an Anthropic API key.')
+  console.log('Tip: your coding agent can do this for you; see SETUP.md.')
   const a = {}
-
-  a.SANDBOX_PROVIDER = await choose('\nWhich sandbox provider do you want to use?', [
-    { label: 'E2B', hint: 'e2b.dev, $100 free credit when you sign up', value: 'e2b' },
-    { label: 'Impello', hint: 'impello.ai, 7-day free trial', value: 'impello' },
-  ])
-  console.log(a.SANDBOX_PROVIDER === 'e2b' ? 'Make a key at https://e2b.dev/dashboard.' : 'Make a key at https://dashboard.impello.ai (API Keys tab).')
-  a.SANDBOX_API_KEY = await askHidden('Paste the API key:')
 
   const claude = await choose('\nHow should the bot sign in to Claude?', [
     { label: 'My Claude Pro or Max plan', hint: '`claude setup-token`; only YOU should use the bot', value: 'oauth' },

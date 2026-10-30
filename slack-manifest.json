@@ -1,15 +1,15 @@
 {
   "display_information": {
-    "name": "Percy Jr",
-    "description": "Runs Claude Code in a cloud sandbox, one per Slack thread.",
+    "name": "Slack Agent Runner",
+    "description": "Runs Claude Code on a machine you control, one workspace per Slack thread.",
     "background_color": "#1d1c1d"
   },
   "features": {
     "app_home": { "home_tab_enabled": true, "messages_tab_enabled": true, "messages_tab_read_only_enabled": false },
-    "bot_user": { "display_name": "percy-jr", "always_online": true },
+    "bot_user": { "display_name": "slack-agent-runner", "always_online": true },
     "code_channels": { "enabled": true },
     "agent_view": {
-      "agent_description": "Percy Jr runs Claude Code in its own cloud sandbox, works on your GitHub repositories, and opens pull requests.",
+      "agent_description": "Slack Agent Runner runs Claude Code on your own machine, works on your GitHub repositories, and opens pull requests.",
       "suggested_prompts": [
         { "title": "Fix an issue", "message": "Find an issue in one of my repositories, fix it, test it, and open a PR." },
         { "title": "Investigate this", "message": "Investigate what I am currently viewing in Slack." },

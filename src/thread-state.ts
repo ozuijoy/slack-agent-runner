@@ -1,6 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
 import { idlePauseMs, maxTurnMs, type Env } from './env.ts'
-import { pauseThreadSandbox } from './sandbox.ts'
 import { deleteMessage, postInThread } from './slack.ts'
 import {
   abortStart,
@@ -211,26 +210,14 @@ export class ThreadState extends DurableObject<Env> {
         if (result.next) await this.start(result.next)
         break
       case 'pause': {
-        // `pausing` is saved BEFORE the call, so a message that arrives while it runs waits
-        // instead of starting a turn the pause would freeze.
+        // There is nothing to pause any more: a turn that is not running holds nothing on the
+        // machine, and the thread's session is in D1 rather than on a disk that has to be frozen.
+        // The state still moves to paused, because that is what the next message waits for.
         await this.save(data)
-        let paused = false
-        try {
-          await pauseThreadSandbox(this.env, data.channel, data.threadTs)
-          paused = true
-        } catch (err) {
-          console.error(`pause failed for ${data.channel}:${data.threadTs}; retrying in a minute:`, err)
-        }
         const fresh = (await this.ctx.storage.get<ThreadData>('thread'))!
-        const next = afterPause(fresh, { paused, ...this.clock() })
+        const next = afterPause(fresh, { paused: true, ...this.clock() })
         await this.save(fresh)
         if (next) await this.start(next)
-        // If every retry fails, the sandbox's own timeout pauses it anyway (see src/sandbox.ts),
-        // so a thread never loses its history.
-        if (!paused && !next) {
-          await this.ctx.storage.setAlarm(Date.now() + 60_000)
-          return
-        }
         break
       }
     }
